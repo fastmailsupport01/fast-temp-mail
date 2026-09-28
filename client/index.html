@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#07111f" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="./src/assets/fast-temp-mail-logo.png" />
+    <title>Fast Temp Mail</title>
+    <style>
+      html,body{margin:0;min-height:100%;background:#030812;color:#f5f9ff;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+      [data-boot-fallback]{min-height:100vh;display:grid;place-items:center;align-content:center;gap:14px;padding:24px;text-align:center}
+      [data-boot-fallback] i{width:34px;height:34px;border:3px solid #183858;border-top-color:#168cff;border-radius:50%;animation:boot-spin .8s linear infinite}
+      [data-boot-fallback] p{margin:0;color:#93a4bd;font-size:14px}
+      @keyframes boot-spin{to{transform:rotate(360deg)}}
+      @media(prefers-reduced-motion:reduce){[data-boot-fallback] i{animation:none;border-top-color:#183858;background:#168cff}}
+    </style>
+    <script src="./src/main.tsx" type="module"></script>
+  </head>
+  <body>
+    <div data-boot-fallback="" aria-live="polite"><i aria-hidden="true"></i><p>Opening Fast Temp Mail…</p></div>
+    <div
+      data-generated-space-root=""
+      data-generated-space-slug="fasttempmail"
+    ></div>
+  </body>
+</html>
