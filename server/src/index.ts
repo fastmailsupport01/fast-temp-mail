@@ -72,7 +72,7 @@ async function handleTwilioSmsWebhook(request: Request): Promise<Response> {
     const form = await request.formData();
     for (const [k, v] of form.entries()) params[k] = String(v);
   } catch {
-    return respond();
+    return new Response("Bad request", { status: 400 });
   }
   const signature = request.headers.get("x-twilio-signature") ?? "";
   if (!validateTwilioSignature(signature, twilioSmsWebhookUrl(), params)) {
