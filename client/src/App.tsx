@@ -733,12 +733,12 @@ function Footer({ demoMode }: { demoMode: boolean }) {
             <h4>Company</h4>
             <a href="#preview">About</a>
             <a href="#pricing">Contact</a>
-            <a href="#pricing">Privacy</a>
+            <a href="/privacy">Privacy</a>
           </div>
           <div>
             <h4>Legal</h4>
             <a href="#pricing">Terms</a>
-            <a href="#pricing">Privacy</a>
+            <a href="/privacy">Privacy</a>
             <a href="#pricing">Security</a>
           </div>
         </div>
@@ -1938,6 +1938,145 @@ function Workspace({
   );
 }
 
+function PrivacyPage() {
+  return (
+    <div className="landing">
+      <nav className="navbar">
+        <div className="container nav-inner">
+          <a className="brand" href="/" aria-label="Fast Temp Mail home">
+            <img src={logo} alt="Fast Temp Mail" className="logo" />
+          </a>
+          <div className="nav-links">
+            <a href="/#features">Features</a>
+            <a href="/#preview">Dashboard</a>
+            <a href="/#pricing">Pricing</a>
+          </div>
+          <div className="nav-buttons">
+            <a className="btn" href="/">
+              Back to home
+            </a>
+          </div>
+        </div>
+      </nav>
+      <main className="container" style={{ padding: "56px 20px 90px", maxWidth: 860 }}>
+        <h1 style={{ fontSize: 36, marginBottom: 8 }}>Privacy Policy</h1>
+        <p style={{ color: "var(--muted)", marginBottom: 32 }}>Last updated: September 29, 2026</p>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>1. Overview</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            Fast Temp Mail ("we", "our") provides temporary email addresses and related account features. This policy
+            explains what information we collect, how we use it, and the choices you have. By using Fast Temp Mail you
+            agree to this policy.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>2. Information we collect</h2>
+          <ul style={{ color: "var(--muted)", lineHeight: 1.8, paddingLeft: 20 }}>
+            <li>
+              <strong style={{ color: "var(--text)" }}>Account information:</strong> when you sign up with email and
+              password we store your name, email address, and a one-way hash of your password (we never store plain-text
+              passwords).
+            </li>
+            <li>
+              <strong style={{ color: "var(--text)" }}>Google sign-in:</strong> if you choose "Continue with Google" we
+              receive your name, email address, and profile picture from Google using the openid, email, and profile
+              scopes. We use this only to create and sign you into your account.
+            </li>
+            <li>
+              <strong style={{ color: "var(--text)" }}>Temporary addresses and usage:</strong> the temporary addresses
+              you generate, their creation time, and basic service logs needed to operate the service.
+            </li>
+            <li>
+              <strong style={{ color: "var(--text)" }}>Wallet and plans:</strong> your wallet balance, plan type, and
+              deposit/upgrade records.
+            </li>
+            <li>
+              <strong style={{ color: "var(--text)" }}>Device data:</strong> a session token stored in your browser's
+              local storage to keep you signed in, and your theme preference.
+            </li>
+          </ul>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>3. How we use your information</h2>
+          <ul style={{ color: "var(--muted)", lineHeight: 1.8, paddingLeft: 20 }}>
+            <li>To provide, maintain, and secure the temporary email service.</li>
+            <li>To send verification and password-reset codes by email.</li>
+            <li>To prevent fraud, abuse, and unauthorized access.</li>
+            <li>To respond to your support requests.</li>
+          </ul>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>4. Temporary addresses</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            Free temporary addresses automatically expire 24 hours after creation, along with their contents. Temporary
+            addresses are designed for short-lived use — do not use them for accounts or services you need long-term
+            access to, such as banking or primary email accounts.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>5. Data sharing</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            We do not sell your personal information. We share limited data only with service providers required to
+            operate Fast Temp Mail — for example, our email delivery provider, which receives your email address solely
+            to deliver verification and password-reset messages. We may disclose information if required by law.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>6. Data retention and deletion</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            We keep account data while your account is active. You may request deletion of your account and personal data
+            at any time by contacting us at the address below; we will delete it unless we are required to retain it for
+            legal or security reasons.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>7. Security</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            We use reasonable technical measures to protect your information, including hashed password storage and
+            encrypted connections (HTTPS). No method of transmission over the internet is completely secure, so we
+            cannot guarantee absolute security.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>8. Children's privacy</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            Fast Temp Mail is not directed at children under 13, and we do not knowingly collect their personal
+            information.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>9. Changes to this policy</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            We may update this policy from time to time. The "Last updated" date at the top will reflect the latest
+            version.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: 8 }}>
+          <h2 style={{ fontSize: 22, marginBottom: 10 }}>10. Contact us</h2>
+          <p style={{ color: "var(--muted)", lineHeight: 1.7 }}>
+            For privacy questions or data requests, contact us at{" "}
+            <a href="mailto:fastmail.support01@gmail.com" style={{ color: "var(--cyan)" }}>
+              fastmail.support01@gmail.com
+            </a>
+            .
+          </p>
+        </section>
+      </main>
+      <Footer demoMode={false} />
+    </div>
+  );
+}
+
 /* ================= App root ================= */
 
 export function App() {
@@ -2045,6 +2184,12 @@ export function App() {
   useEffect(() => {
     if (dashboardProbe.isError) logout();
   }, [dashboardProbe.isError, logout]);
+
+  const showPrivacy =
+    typeof window !== "undefined" && window.location.pathname.replace(/\/+$/, "") === "/privacy";
+  if (showPrivacy) {
+    return <PrivacyPage />;
+  }
 
   if (!isAuthed) {
     return (
