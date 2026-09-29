@@ -2,6 +2,13 @@ import { defineAction, z, type ActionsModule, type Ctx } from "./sdk-shim";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
 import * as schema from "./schema";
 import { otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
+import {
+  SMS_NUMBER_PRICE_USD,
+  SMS_NUMBER_RENTAL_DAYS,
+  buyTwilioNumber,
+  releaseTwilioNumber,
+  twilioConfigured,
+} from "./sms";
 
 const OTP_SENDER_NAME = "Fast Mail";
 const MINIMUM_DEPOSIT = 3;
@@ -866,6 +873,180 @@ export const Actions = {
       } catch {
         return { ok: false, message: "Google sign-in is temporarily unavailable. Please try again.", token: null, role: null };
       }
+    },
+  }),
+
+  /* ================= Virtual numbers (SMS receiving) ================= */
+
+  getSmsConfig: defineAction({
+    request: z.object({}),
+    response: z.object({
+      twilioReady: z.boolean(),
+      numberPriceUSD: z.number(),
+      rentalDays: z.number(),
+      webhookUrl: z.string(),
+    }),
+    async handler() {
+      const { twilioSmsWebhookUrl } = await import("./sms");
+      return {
+        twilioReady: twilioConfigured(),
+        numberPriceUSD: SMS_NUMBER_PRICE_USD,
+        rentalDays: SMS_NUMBER_RENTAL_DAYS,
+        webhookUrl: twilioSmsWebhookUrl(),
+      };
+    },
+  }),
+
+  listVirtualNumbers: defineAction({
+    request: z.object({ token: z.string().min(20) }),
+    response: z.object({
+      numbers: z.array(z.object({
+        id: z.number(),
+        phoneNumber: z.string(),
+        status: z.string(),
+        expiresAt: z.string(),
+        unread: z.number(),
+      })),
+    }),
+    async handler(ctx, args) {
+      const user = await sessionUser(ctx, args.token);
+      if (!user) throw new Error("Session expired. Sign in again.");
+      const db = ctx.db<typeof schema>();
+      const rows = await db.select().from(schema.virtualNumbers)
+        .where(eq(schema.virtualNumbers.userId, user.id))
+        .orderBy(desc(schema.virtualNumbers.createdAt)).limit(20);
+      const numbers = [];
+      for (const row of rows) {
+        const unread = await db.select({ id: schema.smsMessages.id }).from(schema.smsMessages)
+          .where(and(eq(schema.smsMessages.numberId, row.id), eq(schema.smsMessages.isRead, false)));
+        numbers.push({
+          id: row.id,
+          phoneNumber: row.phoneNumber,
+          status: row.status,
+          expiresAt: row.expiresAt.toISOString(),
+          unread: unread.length,
+        });
+      }
+      return { numbers };
+    },
+  }),
+
+  rentVirtualNumber: defineAction({
+    request: z.object({ token: z.string().min(20) }),
+    response: z.object({
+      ok: z.boolean(),
+      message: z.string(),
+      number: z.object({ id: z.number(), phoneNumber: z.string(), expiresAt: z.string() }).nullable(),
+    }),
+    async handler(ctx, args) {
+      const user = await sessionUser(ctx, args.token);
+      if (!user) return { ok: false, message: "Session expired. Sign in again.", number: null };
+      if (!twilioConfigured()) {
+        return { ok: false, message: "SMS receiving is not configured yet (Twilio). The administrator needs to connect a Twilio account first.", number: null };
+      }
+      const db = ctx.db<typeof schema>();
+      const activeCount = await db.select({ id: schema.virtualNumbers.id }).from(schema.virtualNumbers)
+        .where(and(eq(schema.virtualNumbers.userId, user.id), eq(schema.virtualNumbers.status, "active")));
+      if (activeCount.length >= 3) {
+        return { ok: false, message: "You already have 3 active numbers — release one before renting another.", number: null };
+      }
+      const walletRows = await db.select().from(schema.wallets).where(eq(schema.wallets.userId, user.id)).limit(1);
+      const wallet = walletRows[0];
+      if (!wallet) return { ok: false, message: "Wallet not found.", number: null };
+      if (wallet.balance < SMS_NUMBER_PRICE_USD) {
+        return { ok: false, message: `Insufficient balance. A number costs $${SMS_NUMBER_PRICE_USD.toFixed(2)} for ${SMS_NUMBER_RENTAL_DAYS} days — please deposit first.`, number: null };
+      }
+      let bought: { phoneNumber: string; sid: string };
+      try {
+        bought = await buyTwilioNumber();
+      } catch (err) {
+        console.error("[sms] number purchase failed:", err);
+        return { ok: false, message: "Could not rent a number right now. Please try again later.", number: null };
+      }
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + SMS_NUMBER_RENTAL_DAYS * 24 * 60 * 60 * 1000);
+      const publicId = `ZM-${Date.now().toString(36).toUpperCase()}-${randomToken(3).toUpperCase()}`;
+      await db.update(schema.wallets)
+        .set({ balance: Math.round((wallet.balance - SMS_NUMBER_PRICE_USD) * 100) / 100, updatedAt: now })
+        .where(eq(schema.wallets.id, wallet.id));
+      await db.insert(schema.transactions).values({
+        publicId, userId: user.id, walletId: wallet.id, type: "debit",
+        amount: SMS_NUMBER_PRICE_USD, currency: "USD", status: "completed",
+        provider: "twilio", description: `Virtual number rental ${bought.phoneNumber} (${SMS_NUMBER_RENTAL_DAYS} days)`,
+        createdAt: now,
+      });
+      const inserted = await db.insert(schema.virtualNumbers).values({
+        userId: user.id, phoneNumber: bought.phoneNumber, provider: "twilio",
+        providerSid: bought.sid, status: "active",
+        rentedAt: now, expiresAt, createdAt: now, updatedAt: now,
+      }).returning();
+      await audit(ctx, user.id, "sms.number_rented");
+      ctx.invalidateQueries();
+      const row = inserted[0];
+      return {
+        ok: true,
+        message: `Number ${bought.phoneNumber} is active for ${SMS_NUMBER_RENTAL_DAYS} days. Share it anywhere — incoming SMS will appear in its inbox.`,
+        number: row ? { id: row.id, phoneNumber: row.phoneNumber, expiresAt: row.expiresAt.toISOString() } : null,
+      };
+    },
+  }),
+
+  getSmsInbox: defineAction({
+    request: z.object({ token: z.string().min(20), numberId: z.number().int().positive() }),
+    response: z.object({
+      ok: z.boolean(),
+      message: z.string(),
+      messages: z.array(z.object({
+        id: z.number(), sender: z.string(), body: z.string(),
+        receivedAt: z.string(), isRead: z.boolean(),
+      })),
+    }),
+    async handler(ctx, args) {
+      const user = await sessionUser(ctx, args.token);
+      if (!user) return { ok: false, message: "Session expired. Sign in again.", messages: [] };
+      const db = ctx.db<typeof schema>();
+      const numRows = await db.select().from(schema.virtualNumbers)
+        .where(and(eq(schema.virtualNumbers.id, args.numberId), eq(schema.virtualNumbers.userId, user.id))).limit(1);
+      const number = numRows[0];
+      if (!number) return { ok: false, message: "Number not found.", messages: [] };
+      const msgs = await db.select().from(schema.smsMessages)
+        .where(eq(schema.smsMessages.numberId, number.id))
+        .orderBy(desc(schema.smsMessages.receivedAt)).limit(100);
+      await db.update(schema.smsMessages).set({ isRead: true })
+        .where(eq(schema.smsMessages.numberId, number.id));
+      return {
+        ok: true, message: "ok",
+        messages: msgs.map((m) => ({
+          id: m.id, sender: m.sender, body: m.body,
+          receivedAt: m.receivedAt.toISOString(), isRead: m.isRead,
+        })),
+      };
+    },
+  }),
+
+  releaseVirtualNumber: defineAction({
+    request: z.object({ token: z.string().min(20), numberId: z.number().int().positive() }),
+    response: okMessage,
+    async handler(ctx, args) {
+      const user = await sessionUser(ctx, args.token);
+      if (!user) return { ok: false, message: "Session expired. Sign in again." };
+      const db = ctx.db<typeof schema>();
+      const numRows = await db.select().from(schema.virtualNumbers)
+        .where(and(eq(schema.virtualNumbers.id, args.numberId), eq(schema.virtualNumbers.userId, user.id))).limit(1);
+      const number = numRows[0];
+      if (!number) return { ok: false, message: "Number not found." };
+      if (number.status !== "active") return { ok: false, message: "This number is already released." };
+      if (number.providerSid && twilioConfigured()) {
+        try { await releaseTwilioNumber(number.providerSid); } catch (err) {
+          console.error("[sms] Twilio release failed:", err);
+        }
+      }
+      await db.update(schema.virtualNumbers)
+        .set({ status: "released", releasedAt: new Date(), updatedAt: new Date() })
+        .where(eq(schema.virtualNumbers.id, number.id));
+      await audit(ctx, user.id, "sms.number_released");
+      ctx.invalidateQueries();
+      return { ok: true, message: `Number ${number.phoneNumber} has been released. Its SMS history stays in your account.` };
     },
   }),
 } satisfies ActionsModule;

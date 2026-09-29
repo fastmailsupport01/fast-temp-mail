@@ -204,6 +204,9 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
   plus: <path d="M12 5v14M5 12h14" />,
   inbox: <path d="M22 12h-6l-2 3h-4l-2-3H2M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z" />,
   wallet: <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4M3 5v14a2 2 0 0 0 2 2h16V7M18 14h.01" />,
+  phone: (
+    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 2z" />
+  ),
   user: (
     <g>
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -888,6 +891,11 @@ function HomePage({
             <h3>Developer Ready</h3>
             <p>Clean dashboard, instant copy, and a workflow built for testing and quick signups.</p>
           </div>
+          <div className="feature">
+            <div className="feature-icon">📱</div>
+            <h3>SMS Receiving</h3>
+            <p>Rent a virtual number and receive real SMS verification codes — $2 for 30 days.</p>
+          </div>
         </div>
       </section>
 
@@ -1312,7 +1320,7 @@ function AuthModal({
 
 /* ================= Authenticated workspace ================= */
 
-type WorkspaceView = "inbox" | "wallet" | "profile" | "admin";
+type WorkspaceView = "inbox" | "numbers" | "wallet" | "profile" | "admin";
 
 function InboxView({ token, showToast, demoMode }: { token: string; showToast: (t: string) => void; demoMode: boolean }) {
   return (
@@ -1320,6 +1328,169 @@ function InboxView({ token, showToast, demoMode }: { token: string; showToast: (
       <h2>Inbox</h2>
       <p>Generate temporary addresses and read incoming messages. Addresses expire automatically after 24 hours.</p>
       <LandingGenerator token={token} demoMode={demoMode} showToast={showToast} />
+    </div>
+  );
+}
+
+function NumbersView({ token, showToast }: { token: string; showToast: (t: string) => void }) {
+  const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const configQuery = useQuery({
+    queryKey: ["sms-config"],
+    queryFn: () => api.getSmsConfig({}),
+    retry: false,
+  });
+  const numbersQuery = useQuery({
+    queryKey: ["virtual-numbers", token],
+    queryFn: () => api.listVirtualNumbers({ token }),
+    retry: false,
+  });
+
+  const config = configQuery.data;
+  const numbers = numbersQuery.data?.numbers ?? [];
+  const activeId = selectedId ?? numbers[0]?.id ?? null;
+  const active = numbers.find((n) => n.id === activeId) ?? null;
+
+  const inboxQuery = useQuery({
+    queryKey: ["sms-inbox", token, activeId],
+    queryFn: () => api.getSmsInbox({ token, numberId: activeId! }),
+    enabled: activeId != null,
+    refetchInterval: 15000,
+    retry: false,
+  });
+
+  const rent = useMutation({
+    mutationFn: () => api.rentVirtualNumber({ token }),
+    onSuccess: (r) => {
+      showToast(r.message);
+      if (r.ok) {
+        void queryClient.invalidateQueries({ queryKey: ["virtual-numbers"] });
+        void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        if (r.number) setSelectedId(r.number.id);
+      }
+    },
+    onError: () => showToast("Could not reach the server. Please try again."),
+  });
+
+  const release = useMutation({
+    mutationFn: (id: number) => api.releaseVirtualNumber({ token, numberId: id }),
+    onSuccess: (r) => {
+      showToast(r.message);
+      if (r.ok) {
+        setSelectedId(null);
+        void queryClient.invalidateQueries({ queryKey: ["virtual-numbers"] });
+      }
+    },
+    onError: () => showToast("Could not reach the server. Please try again."),
+  });
+
+  const copyNumber = async (n: string) => {
+    const ok = await copyToClipboard(n);
+    showToast(ok ? "Number copied." : "Copy failed — please copy it manually.");
+  };
+
+  return (
+    <div className="section-block">
+      <h2>Virtual numbers</h2>
+      <p>
+        Rent a real phone number and receive SMS verification codes on it —{" "}
+        {config ? `$${config.numberPriceUSD.toFixed(2)} for ${config.rentalDays} days, billed from your wallet.` : "billed from your wallet."}
+      </p>
+
+      {config && !config.twilioReady && (
+        <div className="notice" style={{ marginTop: 12 }}>
+          SMS receiving is not connected yet — the administrator needs to connect a Twilio account first.
+          This feature is fully built; nothing here is simulated.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+        <button
+          className="button"
+          disabled={rent.isPending || (config ? !config.twilioReady : true)}
+          onClick={() => rent.mutate()}
+        >
+          <Icon name="plus" size={16} />
+          <span>{rent.isPending ? "Renting…" : "Rent a number"}</span>
+        </button>
+      </div>
+
+      {numbersQuery.isLoading ? (
+        <div className="empty" style={{ marginTop: 14 }}>Loading your numbers…</div>
+      ) : numbers.length === 0 ? (
+        <div className="empty" style={{ marginTop: 14 }}>
+          You have no virtual numbers yet. Rent one to start receiving SMS.
+        </div>
+      ) : (
+        <div className="row-list" style={{ marginTop: 16 }}>
+          {numbers.map((n) => (
+            <div className="row-item" key={n.id} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <button className="link-button" onClick={() => setSelectedId(n.id)} style={{ fontWeight: 700, fontSize: 16 }}>
+                  {n.phoneNumber}
+                </button>
+                {n.unread > 0 && <span className="badge">{n.unread} new</span>}
+                {n.status !== "active" && <span className="muted">released</span>}
+                <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                  <button className="link-button" title="Copy number" onClick={() => void copyNumber(n.phoneNumber)}>
+                    <Icon name="copy" size={15} />
+                    <span>Copy</span>
+                  </button>
+                  {n.status === "active" && (
+                    <button
+                      className="link-button"
+                      title="Release number"
+                      disabled={release.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Release ${n.phoneNumber}? It will stop receiving SMS immediately.`)) {
+                          release.mutate(n.id);
+                        }
+                      }}
+                    >
+                      <Icon name="trash" size={15} />
+                      <span>Release</span>
+                    </button>
+                  )}
+                </span>
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {n.status === "active" ? `Active until ${new Date(n.expiresAt).toLocaleDateString()}` : "Released"}
+              </div>
+
+              {active?.id === n.id && (
+                <div style={{ marginTop: 6, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <strong>SMS inbox</strong>
+                    <button className="link-button" onClick={() => void inboxQuery.refetch()} title="Refresh">
+                      <Icon name="refresh" size={14} />
+                    </button>
+                  </div>
+                  {inboxQuery.isLoading ? (
+                    <div className="empty">Loading messages…</div>
+                  ) : (inboxQuery.data?.messages.length ?? 0) === 0 ? (
+                    <div className="empty">No messages yet. Share this number anywhere — incoming SMS will appear here automatically.</div>
+                  ) : (
+                    <div className="row-list" style={{ marginTop: 8 }}>
+                      {inboxQuery.data!.messages.map((m) => (
+                        <div key={m.id} className="row-item" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+                          <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                            <strong style={{ fontSize: 13 }}>{m.sender}</strong>
+                            <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
+                              {new Date(m.receivedAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 13, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.body}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1863,6 +2034,7 @@ function Workspace({
 
   const nav: { id: WorkspaceView; icon: string; label: string }[] = [
     { id: "inbox", icon: "inbox", label: "Inbox" },
+    { id: "numbers", icon: "phone", label: "Numbers" },
     { id: "wallet", icon: "wallet", label: "Wallet" },
     { id: "profile", icon: "user", label: "Profile" },
   ];
@@ -1870,6 +2042,7 @@ function Workspace({
 
   const titles: Record<WorkspaceView, { h: string; p: string }> = {
     inbox: { h: "Inbox", p: "Your temporary addresses and messages." },
+    numbers: { h: "Numbers", p: "Virtual phone numbers for receiving SMS." },
     wallet: { h: "Wallet", p: "Balance, deposits and plan upgrades." },
     profile: { h: "Profile", p: "Account settings." },
     admin: { h: "Administration", p: "Users, plans, payments and provider setup." },
@@ -1920,6 +2093,7 @@ function Workspace({
         ) : (
           <>
             {view === "inbox" && <InboxView token={token} showToast={showToast} demoMode={configQuery.data?.demoMode ?? true} />}
+            {view === "numbers" && <NumbersView token={token} showToast={showToast} />}
             {view === "wallet" && (
               <WalletView
                 token={token}

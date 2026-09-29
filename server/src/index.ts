@@ -6,6 +6,7 @@
  *   config and plan settings from environment/defaults, then starts listening.
  * - POST /actions — JSON action dispatch: { name, args } → action result.
  *   A Zod schema violation returns HTTP 400 with the validation issues.
+ * - POST /webhooks/twilio-sms — inbound SMS from Twilio (signature-verified).
  * - GET /health — liveness probe.
  * - GET /* — static files from client/dist, with SPA fallback to index.html.
  */
@@ -13,9 +14,12 @@
 import { serve } from "bun";
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { Actions } from "./actions";
 import { getDb, runMigrations, seedAdminFromEnv, seedOAuthConfigFromEnv, seedPlanConfig } from "./db";
+import * as schema from "./schema";
+import { twilioSmsWebhookUrl, validateTwilioSignature } from "./sms";
 import type { Ctx, SpaceDb } from "./sdk-shim";
 
 const PORT = Number(process.env.PORT ?? "3000");
@@ -53,6 +57,54 @@ const ctx: Ctx = {
     /* client owns its cache */
   },
 };
+
+/**
+ * Inbound SMS webhook called by Twilio for each message to a rented number.
+ * Twilio posts form-urlencoded fields (From, To, Body, MessageSid, ...) and
+ * signs the request with X-Twilio-Signature. We verify the signature against
+ * the public webhook URL before storing anything.
+ */
+async function handleTwilioSmsWebhook(request: Request): Promise<Response> {
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`;
+  const respond = () => new Response(twiml, { headers: { "content-type": "text/xml; charset=utf-8" } });
+  let params: Record<string, string> = {};
+  try {
+    const form = await request.formData();
+    for (const [k, v] of form.entries()) params[k] = String(v);
+  } catch {
+    return respond();
+  }
+  const signature = request.headers.get("x-twilio-signature") ?? "";
+  if (!validateTwilioSignature(signature, twilioSmsWebhookUrl(), params)) {
+    console.error("[sms] rejected webhook with invalid Twilio signature");
+    return new Response("Forbidden", { status: 403 });
+  }
+  const to = (params["To"] ?? "").trim();
+  const from = (params["From"] ?? "").trim();
+  const body = (params["Body"] ?? "").slice(0, 4000);
+  const messageSid = (params["MessageSid"] ?? "").trim() || null;
+  if (!to || !from) return respond();
+  try {
+    const db = ctx.db<typeof schema>();
+    if (messageSid) {
+      const dup = await db.select({ id: schema.smsMessages.id }).from(schema.smsMessages)
+        .where(eq(schema.smsMessages.providerSid, messageSid)).limit(1);
+      if (dup[0]) return respond();
+    }
+    const numbers = await db.select().from(schema.virtualNumbers)
+      .where(and(eq(schema.virtualNumbers.phoneNumber, to), eq(schema.virtualNumbers.status, "active"))).limit(1);
+    const number = numbers[0];
+    if (!number) return respond();
+    if (number.expiresAt.getTime() <= Date.now()) return respond();
+    await db.insert(schema.smsMessages).values({
+      numberId: number.id, sender: from, body, providerSid: messageSid,
+      receivedAt: new Date(), isRead: false,
+    });
+  } catch (err) {
+    console.error("[sms] failed to store inbound SMS:", err);
+  }
+  return respond();
+}
 
 function makeActionHandler(request: Request): Promise<Response> {
   return (async () => {
@@ -134,6 +186,10 @@ async function boot(): Promise<void> {
       }
       if (url.pathname === "/actions") {
         return makeActionHandler(request);
+      }
+      if (url.pathname === "/webhooks/twilio-sms") {
+        if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+        return handleTwilioSmsWebhook(request);
       }
       return serveStatic(url);
     },

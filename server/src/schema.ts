@@ -16,6 +16,8 @@ import { boolean, integer, pgTable, real, serial, text, timestamp, uniqueIndex }
  *   disposable mail works.
  * - plan_config — single-row (id=1) admin-editable plan settings.
  * - google_oauth_config / google_oauth_states — "Continue with Google".
+ * - virtual_numbers / sms_messages — rented virtual phone numbers for
+ *   receiving SMS (Twilio webhook), billed monthly from the wallet.
  *
  * Fresh installs apply the single consolidated drizzle migration at boot.
  */
@@ -142,3 +144,27 @@ export const googleOAuthStates = pgTable("google_oauth_states", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [uniqueIndex("google_oauth_states_state_unique").on(table.stateHash)]);
+
+export const virtualNumbers = pgTable("virtual_numbers", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  phoneNumber: text("phone_number").notNull(),
+  provider: text("provider").notNull().default("twilio"),
+  providerSid: text("provider_sid"),
+  status: text("status", { enum: ["active", "released"] }).notNull().default("active"),
+  rentedAt: timestamp("rented_at", { withTimezone: true }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  releasedAt: timestamp("released_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+}, (table) => [uniqueIndex("virtual_numbers_phone_unique").on(table.phoneNumber)]);
+
+export const smsMessages = pgTable("sms_messages", {
+  id: serial("id").primaryKey(),
+  numberId: integer("number_id").notNull().references(() => virtualNumbers.id, { onDelete: "cascade" }),
+  sender: text("sender").notNull(),
+  body: text("body").notNull(),
+  providerSid: text("provider_sid"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+});
