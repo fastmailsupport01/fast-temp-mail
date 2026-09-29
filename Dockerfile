@@ -4,7 +4,6 @@
 # Run:    docker run --env-file .env -p 3000:3000 fasttempmail
 # The server listens on $PORT (Render/Railway set it automatically).
 
-
 FROM oven/bun:1.4.2 AS build
 WORKDIR /app
 

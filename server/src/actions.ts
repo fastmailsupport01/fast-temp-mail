@@ -3,7 +3,7 @@ import { and, desc, eq, gt, lt } from "drizzle-orm";
 import * as schema from "./schema";
 import { otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
 
-const OTP_SENDER_NAME = "Fast Temp Mail";
+const OTP_SENDER_NAME = "Fast Mail";
 const MINIMUM_DEPOSIT = 3;
 const okMessage = z.object({ ok: z.boolean(), message: z.string() });
 const sessionResponse = z.object({ ok: z.boolean(), message: z.string(), token: z.string().nullable(), role: z.enum(["user", "admin"]).nullable() });

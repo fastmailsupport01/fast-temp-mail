@@ -7,7 +7,7 @@
  * was sent.
  *
  * RESEND_FROM must be an address on a domain you verified in Resend
- * (e.g. "Fast Temp Mail <noreply@mail.example.com>"). Resend's
+ * (e.g. "Fast Mail <noreply@mail.example.com>"). Resend's
  * `onboarding@resend.dev` works for testing but only delivers to the
  * Resend account owner's address.
  */
@@ -24,7 +24,7 @@ export async function sendEmail(
 ): Promise<boolean> {
   const apiKey = (process.env.RESEND_API_KEY ?? "").trim();
   if (!apiKey) return false;
-  const from = (process.env.RESEND_FROM ?? "").trim() || "Fast Temp Mail <onboarding@resend.dev>";
+  const from = (process.env.RESEND_FROM ?? "").trim() || "Fast Mail <onboarding@resend.dev>";
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -47,9 +47,9 @@ export async function sendEmail(
 
 export function otpEmail(code: string): { subject: string; html: string; text: string } {
   return {
-    subject: "Your Fast Temp Mail verification code",
-    html: `<p>Your Fast Temp Mail verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes. If you did not request this, you can ignore this email.</p>`,
-    text: `Your Fast Temp Mail verification code is ${code}. It expires in 10 minutes.`,
+    subject: "Your Fast Mail verification code",
+    html: `<p>Your Fast Mail verification code is <strong>${code}</strong>.</p><p>It expires in 10 minutes. If you did not request this, you can ignore this email.</p>`,
+    text: `Your Fast Mail verification code is ${code}. It expires in 10 minutes.`,
   };
 }
 
