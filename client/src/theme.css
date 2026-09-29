@@ -715,6 +715,20 @@ img{
     color:#aee6ff;
 }
 
+button.preview-link{
+    background:none;
+    border:none;
+    cursor:pointer;
+    font:inherit;
+    text-align:left;
+    width:100%;
+}
+
+button.preview-link:hover{
+    background:rgba(30,140,255,.12);
+    color:#aee6ff;
+}
+
 .preview-main{
     background:#040d1a;
     padding:30px;
