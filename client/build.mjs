@@ -7,21 +7,25 @@ import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+
 const here = dirname(fileURLToPath(import.meta.url));
 const entry = join(here, "src", "main.tsx");
 const outDir = join(here, "dist");
+
 
 if (!existsSync(entry)) {
   console.error(`Entry not found: ${entry}`);
   process.exit(1);
 }
 
+
 mkdirSync(outDir, { recursive: true });
+
 
 const result = await Bun.build({
   entrypoints: [entry],
   outdir: outDir,
-  naming: "assets/[name]-[hash].[ext]",
+  naming: "[name].[ext]",
   target: "browser",
   format: "esm",
   sourcemap: "external",
@@ -30,11 +34,13 @@ const result = await Bun.build({
   plugins: [(await import("bun-plugin-tailwind")).default],
 });
 
+
 if (!result.success) {
   console.error("Client build failed:");
   for (const log of result.logs) console.error(log);
   process.exit(1);
 }
+
 
 // Static files served as-is by the server.
 const indexHtml = `<!doctype html>
@@ -55,7 +61,10 @@ const indexHtml = `<!doctype html>
 `;
 writeFileSync(join(outDir, "index.html"), indexHtml);
 
+
 const logo = join(here, "src", "assets", "fast-temp-mail-logo.png");
 if (existsSync(logo)) cpSync(logo, join(outDir, "logo.png"));
 
+
 console.log(`Client build ok → ${outDir}`);
+
