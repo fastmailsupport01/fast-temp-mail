@@ -1,7 +1,7 @@
 import { defineAction, z, type ActionsModule, type Ctx } from "./sdk-shim";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
 import * as schema from "./schema";
-import { otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
+import { gmailPoolSize, otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
 import {
   SMS_NUMBER_PRICE_USD,
   SMS_NUMBER_RENTAL_DAYS,
@@ -222,6 +222,7 @@ export const Actions = {
       proPrice: z.number(),
       gmailPrice: z.number(),
       otpSenderName: z.string(),
+      gmailPoolSize: z.number(),
     }),
     async handler(ctx) {
       const db = ctx.db<typeof schema>();
@@ -238,6 +239,7 @@ export const Actions = {
         proPrice: plan.proPriceCents / 100,
         gmailPrice: plan.gmailPriceCents / 100,
         otpSenderName: OTP_SENDER_NAME,
+        gmailPoolSize: gmailPoolSize(),
       };
     },
   }),
