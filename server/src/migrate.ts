@@ -65,6 +65,8 @@ export async function verifyDatabaseCopy(
     await target.end();
   }
 }
+
+export async function copyDatabaseTo(source: Sql, targetUrl: string): Promise<Record<string, number>> {
   const target = postgres(targetUrl, {
     prepare: false,
     ssl: "require",
