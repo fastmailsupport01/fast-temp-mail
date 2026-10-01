@@ -56,9 +56,11 @@ export async function verifyDatabaseCopy(
   try {
     const result: Record<string, { source: number; target: number; match: boolean }> = {};
     for (const table of TABLES_IN_ORDER) {
-      const [s] = (await source.unsafe(`SELECT count(*)::int AS c FROM "${table}"`)) as Array<{ c: number }>;
-      const [t] = (await target.unsafe(`SELECT count(*)::int AS c FROM "${table}"`)) as Array<{ c: number }>;
-      result[table] = { source: s.c, target: t.c, match: s.c === t.c };
+      const sRows = (await source.unsafe(`SELECT count(*)::int AS c FROM "${table}"`)) as Array<{ c: number }>;
+      const tRows = (await target.unsafe(`SELECT count(*)::int AS c FROM "${table}"`)) as Array<{ c: number }>;
+      const sCount = sRows[0]?.c ?? -1;
+      const tCount = tRows[0]?.c ?? -1;
+      result[table] = { source: sCount, target: tCount, match: sCount === tCount && sCount >= 0 };
     }
     return result;
   } finally {
