@@ -1,7 +1,6 @@
 import { defineAction, z, type ActionsModule, type Ctx } from "./sdk-shim";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
 import * as schema from "./schema";
-import { getSql } from "./db";
 import { gmailPoolSize, otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
 import {
   SMS_NUMBER_PRICE_USD,
