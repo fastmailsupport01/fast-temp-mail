@@ -2,7 +2,6 @@ import { defineAction, z, type ActionsModule, type Ctx } from "./sdk-shim";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
 import * as schema from "./schema";
 import { getSql } from "./db";
-import { copyDatabaseTo, verifyDatabaseCopy } from "./migrate";
 import { gmailPoolSize, otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
 import {
   SMS_NUMBER_PRICE_USD,
@@ -1054,56 +1053,4 @@ export const Actions = {
     },
   }),
 
-  // TEMPORARY one-time migration action (Render Postgres -> Supabase).
-  // Removed right after the migration. Guarded by a one-time secret and
-  // restricted to the project's own Supabase host.
-  runOneTimeMigration: defineAction({
-    request: z.object({ secret: z.string().min(16), targetDatabaseUrl: z.string().min(1) }),
-    response: z.object({ ok: z.boolean(), message: z.string(), counts: z.record(z.string(), z.number()).nullable() }),
-    async handler(_ctx, args) {
-      if (args.secret !== "8915f822eac793328e2e37d68a052c3f5bd41853a679f4c2") {
-        return { ok: false, message: "Forbidden.", counts: null };
-      }
-      const targetHostOk =
-        args.targetDatabaseUrl.includes("db.lmoxfjddlbcjusauylan.supabase.co") ||
-        /\.pooler\.supabase\.com/.test(args.targetDatabaseUrl);
-      if (!targetHostOk) {
-        return { ok: false, message: "Unexpected target host.", counts: null };
-      }
-      try {
-        const counts = await copyDatabaseTo(getSql(), args.targetDatabaseUrl);
-        return { ok: true, message: "Migration completed.", counts };
-      } catch (err) {
-        console.error("[migration] failed:", err);
-        const detail = err instanceof Error ? err.message.slice(0, 200) : "unknown error";
-        return { ok: false, message: `Migration failed: ${detail}`, counts: null };
-      }
-    },
-  }),
-
-  // TEMPORARY one-time verification action (source vs target row counts).
-  // Removed right after the migration. Same one-time secret.
-  verifyOneTimeMigration: defineAction({
-    request: z.object({ secret: z.string().min(16), targetDatabaseUrl: z.string().min(1) }),
-    response: z.object({ ok: z.boolean(), message: z.string(), report: z.any().nullable() }),
-    async handler(_ctx, args) {
-      if (args.secret !== "8915f822eac793328e2e37d68a052c3f5bd41853a679f4c2") {
-        return { ok: false, message: "Forbidden.", report: null };
-      }
-      const targetHostOk =
-        args.targetDatabaseUrl.includes("db.lmoxfjddlbcjusauylan.supabase.co") ||
-        /\.pooler\.supabase\.com/.test(args.targetDatabaseUrl);
-      if (!targetHostOk) {
-        return { ok: false, message: "Unexpected target host.", report: null };
-      }
-      try {
-        const report = await verifyDatabaseCopy(getSql(), args.targetDatabaseUrl);
-        return { ok: true, message: "Verification completed.", report };
-      } catch (err) {
-        console.error("[migration-verify] failed:", err);
-        const detail = err instanceof Error ? err.message.slice(0, 200) : "unknown error";
-        return { ok: false, message: `Verification failed: ${detail}`, report: null };
-      }
-    },
-  }),
 } satisfies ActionsModule;
