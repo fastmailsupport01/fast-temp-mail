@@ -1,6 +1,8 @@
 import { defineAction, z, type ActionsModule, type Ctx } from "./sdk-shim";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
 import * as schema from "./schema";
+import { getSql } from "./db";
+import { copyDatabaseTo } from "./migrate";
 import { gmailPoolSize, otpEmail, resendConfigured, resetEmail, sendEmail } from "./mail";
 import {
   SMS_NUMBER_PRICE_USD,
@@ -1049,6 +1051,29 @@ export const Actions = {
       await audit(ctx, user.id, "sms.number_released");
       ctx.invalidateQueries();
       return { ok: true, message: `Number ${number.phoneNumber} has been released. Its SMS history stays in your account.` };
+    },
+  }),
+
+  // TEMPORARY one-time migration action (Render Postgres -> Supabase).
+  // Removed right after the migration. Guarded by a one-time secret and
+  // restricted to the project's own Supabase host.
+  runOneTimeMigration: defineAction({
+    request: z.object({ secret: z.string().min(16), targetDatabaseUrl: z.string().min(1) }),
+    response: z.object({ ok: z.boolean(), message: z.string(), counts: z.record(z.string(), z.number()).nullable() }),
+    async handler(_ctx, args) {
+      if (args.secret !== "8915f822eac793328e2e37d68a052c3f5bd41853a679f4c2") {
+        return { ok: false, message: "Forbidden.", counts: null };
+      }
+      if (!args.targetDatabaseUrl.includes("db.lmoxfjddlbcjusauylan.supabase.co")) {
+        return { ok: false, message: "Unexpected target host.", counts: null };
+      }
+      try {
+        const counts = await copyDatabaseTo(getSql(), args.targetDatabaseUrl);
+        return { ok: true, message: "Migration completed.", counts };
+      } catch (err) {
+        console.error("[migration] failed:", err);
+        return { ok: false, message: "Migration failed. Check server logs.", counts: null };
+      }
     },
   }),
 } satisfies ActionsModule;

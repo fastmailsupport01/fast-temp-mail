@@ -85,8 +85,7 @@ interface JournalEntry {
   tag: string;
 }
 
-export async function runMigrations(): Promise<void> {
-  const sql = getSql();
+export async function runMigrationsOn(sql: Sql): Promise<void> {
   const dir = drizzleDir();
   await sql.unsafe(
     "CREATE TABLE IF NOT EXISTS _schema_migrations (name TEXT PRIMARY KEY, applied_at BIGINT NOT NULL)",
@@ -120,6 +119,11 @@ export async function runMigrations(): Promise<void> {
     });
     console.log(`[db] applied migration ${fileName} (${statements.length} statements)`);
   }
+}
+
+/** Apply pending migrations on the default DATABASE_URL connection. */
+export async function runMigrations(): Promise<void> {
+  return runMigrationsOn(getSql());
 }
 
 /** Create the admin account from env on first boot. Never overwrites. */
