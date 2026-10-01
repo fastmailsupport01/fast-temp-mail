@@ -78,6 +78,9 @@ export async function copyDatabaseTo(source: Sql, targetUrl: string): Promise<Re
   });
   try {
     await runMigrationsOn(target);
+    // Idempotent: wipe target tables (fresh copy) before inserting.
+    const truncateList = TABLES_IN_ORDER.map((t) => `"${t}"`).join(", ");
+    await target.unsafe(`TRUNCATE TABLE ${truncateList} RESTART IDENTITY CASCADE`);
     const counts: Record<string, number> = {};
     for (const table of TABLES_IN_ORDER) {
       const cols = (await source.unsafe(
