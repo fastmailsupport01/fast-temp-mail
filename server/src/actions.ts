@@ -1064,7 +1064,10 @@ export const Actions = {
       if (args.secret !== "8915f822eac793328e2e37d68a052c3f5bd41853a679f4c2") {
         return { ok: false, message: "Forbidden.", counts: null };
       }
-      if (!args.targetDatabaseUrl.includes("db.lmoxfjddlbcjusauylan.supabase.co")) {
+      const targetHostOk =
+        args.targetDatabaseUrl.includes("db.lmoxfjddlbcjusauylan.supabase.co") ||
+        /\.pooler\.supabase\.com/.test(args.targetDatabaseUrl);
+      if (!targetHostOk) {
         return { ok: false, message: "Unexpected target host.", counts: null };
       }
       try {
@@ -1072,7 +1075,8 @@ export const Actions = {
         return { ok: true, message: "Migration completed.", counts };
       } catch (err) {
         console.error("[migration] failed:", err);
-        return { ok: false, message: "Migration failed. Check server logs.", counts: null };
+        const detail = err instanceof Error ? err.message.slice(0, 200) : "unknown error";
+        return { ok: false, message: `Migration failed: ${detail}`, counts: null };
       }
     },
   }),
