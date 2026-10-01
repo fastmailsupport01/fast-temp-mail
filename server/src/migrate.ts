@@ -42,7 +42,29 @@ const SERIAL_TABLES = [
   "sms_messages",
 ];
 
-export async function copyDatabaseTo(source: Sql, targetUrl: string): Promise<Record<string, number>> {
+export async function verifyDatabaseCopy(
+  source: Sql,
+  targetUrl: string,
+): Promise<Record<string, { source: number; target: number; match: boolean }>> {
+  const target = postgres(targetUrl, {
+    prepare: false,
+    ssl: "require",
+    max: 2,
+    connect_timeout: 20,
+    idle_timeout: 20,
+  });
+  try {
+    const result: Record<string, { source: number; target: number; match: boolean }> = {};
+    for (const table of TABLES_IN_ORDER) {
+      const [s] = (await source.unsafe(`SELECT count(*)::int AS c FROM "${table}"`)) as Array<{ c: number }>;
+      const [t] = (await target.unsafe(`SELECT count(*)::int AS c FROM "${table}"`)) as Array<{ c: number }>;
+      result[table] = { source: s.c, target: t.c, match: s.c === t.c };
+    }
+    return result;
+  } finally {
+    await target.end();
+  }
+}
   const target = postgres(targetUrl, {
     prepare: false,
     ssl: "require",
